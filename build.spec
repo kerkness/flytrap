@@ -4,7 +4,7 @@
 block_cipher = None
 
 
-a = Analysis(['src/flytrap.py'],
+a = Analysis(['flytrap.py'],
              pathex=[],
              binaries=[],
              datas=[],

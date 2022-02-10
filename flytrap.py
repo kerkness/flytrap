@@ -116,16 +116,19 @@ class PaperChanger:
         seconds = self.getScheduleInSeconds()
 
         while self.running:
-            current_time = time.time()
-            elapsed_time = current_time - start_time
-
-            if elapsed_time > seconds:
-                print("Finished iterating in: " + str(int(elapsed_time))  + " seconds")
-                start_time = time.time()
-                self.fetchPaper()
-
+            # current_time = time.time()
+            # elapsed_time = current_time - start_time
+            self.fetchPaper()
             if exit_event.is_set():
                 break
+
+            time.sleep(seconds - ((time.time() - start_time) % seconds))
+
+            # if elapsed_time > seconds:
+            #     print("Finished iterating in: " + str(int(elapsed_time))  + " seconds")
+            #     start_time = time.time()
+            #     self.fetchPaper()
+
                 # break
 
 class MainWindow(QMainWindow):

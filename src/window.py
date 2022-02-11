@@ -1,12 +1,3 @@
-# import os
-# import sys
-# import ctypes
-# import time
-# from tempfile import TemporaryDirectory
-# import tempfile
-# import random
-# import signal
-# import requests
 from threading import Thread, Event
 from PySide6.QtCore import Slot, QSize
 from PySide6.QtGui import QAction
@@ -49,25 +40,21 @@ class MainWindow(QMainWindow):
         self.showDownloadOptions()
 
         threadedFetch(self.download_group, self.user_name)
-        # self.downloader = PaperChanger()
-        # self.paperChanger = Thread(target = papers.loadPaper, args = ())
-        # self.paperChanger.setDaemon(True)
-        # self.paperChanger.start()
-
-    # @Slot()
-    # def fetchPapers(self):
-    #     fetchThread = Thread(target = fetchPaper, args = ())
-    #     fetchThread.setDaemon(True)
-    #     fetchThread.start()
 
     @Slot()
     def showDownloadOptions(self):
+
+        self.optionsGroup = QHBoxLayout()
+
+        self.randomButton = QPushButton("Set Random FlyPaper")
+        self.randomButton.setCheckable(True)
+        self.randomButton.clicked.connect(self.swapPaperNow)
+        self.layout.addWidget(self.randomButton)
 
         self.showingOptions = True
         self.instructions = QLabel()
         self.instructions.setText('FlyPaper filters:')
 
-        self.optionsGroup = QHBoxLayout()
 
         self.downloadGroup = QComboBox()
         self.downloadGroup.addItem('All Paper')
@@ -181,16 +168,9 @@ class MainWindow(QMainWindow):
     @Slot()
     def startDownload(self):
         print("Start button clicked")
-        # self.downloading = True
         self.running = True
         self.current_event = Event()
         threadedSwap(self.download_schedule, self.download_group, self.user_name, self.current_event)
-        # startThread = Thread(target = scheduledPaperSwap, args = ())
-        # startThread.setDaemon(True)
-        # startThread.start()
-        # self.paperChanger.onThread(papers.schedulePaperSwap())
-        # papers.running = True
-        # papers.schedulePaperSwap()
         
         self.downloadButton.setText('Stop')
         self.downloadGroup.setEnabled(False)
@@ -208,10 +188,6 @@ class MainWindow(QMainWindow):
         if self.download_group == 'Liked by':
             self.userName.setEnabled(True)
         self.downloadSchedule.setEnabled(True)
-
-    # @Slot()
-    # def minimizeToTray(self):
-    #     print("Minimize to Tray")
 
     # Override closeEvent, to intercept the window closing event
     # The window will be closed only if there is no check mark in the check box

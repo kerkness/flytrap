@@ -38,7 +38,7 @@ for (dirpath, dirnames, filenames) in os.walk(flypaperdir):
     break
 
 
-def fetchPaper(group, username, statusMessage):
+def fetchPaper(group, username):
     print("fetch paper")
     if len(papers) > 1:
         return
@@ -63,10 +63,10 @@ def fetchPaper(group, username, statusMessage):
 
     for paper in data:
         if paper['id']:
-            savePaper(paper['id'], paper['filename'], group, username, statusMessage)
+            savePaper(paper['id'], paper['filename'], group, username)
 
 
-def savePaper(id, filename, group, username, statusMessage):
+def savePaper(id, filename, group, username):
     # statusMessage.setText('Downloading FlyPaper')
 
     url = "https://flypaper.theflyingfabio.com/render/" + str(id) 
@@ -88,12 +88,12 @@ def savePaper(id, filename, group, username, statusMessage):
     # if len(papers) < 1:
     #     fetchPaper(group, username, statusMessage)
 
-def threadedFetch(group, username, statusMessage):
-    fetchThread = Thread(target = fetchPaper, args = (group, username, statusMessage))
+def threadedFetch(group, username):
+    fetchThread = Thread(target = fetchPaper, args = (group, username))
     fetchThread.setDaemon(True)
     fetchThread.start()
 
-def swapPaper(group, username, statusMessage):
+def swapPaper(group, username):
     # statusMessage.setText('Swapping')
     print("swap the papers from ", papers)
     if (len(papers) >= 1):
@@ -103,7 +103,7 @@ def swapPaper(group, username, statusMessage):
         currentPaper = filename
     # statusMessage.setText('')
     if len(papers) < 1:
-        threadedFetch(group, username, statusMessage)
+        threadedFetch(group, username)
 
 def getScheduleInSeconds(schedule):
     seconds = {
@@ -118,14 +118,14 @@ def getScheduleInSeconds(schedule):
         }
     return seconds.get(schedule, 60)
 
-def scheduledPaperSwap(schedule, group, username, exit_event, statusMessage):
+def scheduledPaperSwap(schedule, group, username, exit_event):
 
     start_time = time.time()
     seconds = getScheduleInSeconds(schedule)
     print("start scheduler")
 
     print("tick")
-    swapPaper(group, username, statusMessage)
+    swapPaper(group, username)
 
     print("sleeping for ", seconds)
     # statusMessage.setText('')
@@ -133,12 +133,12 @@ def scheduledPaperSwap(schedule, group, username, exit_event, statusMessage):
     print("awake", exit_event.is_set())
 
     if not exit_event.is_set():
-        print("Start a new thread")
-        threadedSwap(schedule, group, username, exit_event, statusMessage)
+        # threadedSwap(schedule, group, username, exit_event)
+        return { "swap": True }
 
 
-def threadedSwap(schedule, group, username, exit_event, statusMessage):
-    fetchThread = Thread(target = scheduledPaperSwap, args = (schedule, group, username, exit_event, statusMessage))
+def threadedSwap(schedule, group, username, exit_event):
+    fetchThread = Thread(target = scheduledPaperSwap, args = (schedule, group, username, exit_event))
     fetchThread.setDaemon(True)
     fetchThread.start()
 

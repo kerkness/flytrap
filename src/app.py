@@ -8,8 +8,5 @@ window = MainWindow()
 window.show()
 
 if __name__ == "__main__":
-    try:
-        app.exec()
-    except Exception as e:
-        print(e)
+    app.exec()
     

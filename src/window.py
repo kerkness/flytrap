@@ -2,8 +2,10 @@ from threading import Thread, Event
 from PySide6.QtCore import Slot, QSize, Qt, QThreadPool, QRunnable, QObject, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QMenu, QComboBox, QFileDialog, QSystemTrayIcon, QStyle, QCheckBox, QWidget, QPushButton, QMainWindow, QLabel, QLineEdit, QVBoxLayout, QHBoxLayout
-from papers import threadedFetch, threadedSwap, swapPaper, fetchPaper, scheduledPaperSwap
+from papers import version, swapPaper, fetchPaper, scheduledPaperSwap
 import traceback, sys
+from flytrap import *
+
 
 # Thread pool information
 # https://www.pythonguis.com/tutorials/multithreading-pyside6-applications-qthreadpool/
@@ -27,6 +29,7 @@ class WorkerSignals(QObject):
     finished = Signal()  # QtCore.Signal
     error = Signal(tuple)
     result = Signal(object)
+    progress = Signal(object)
 
 class Worker(QRunnable):
     '''
@@ -49,7 +52,7 @@ class Worker(QRunnable):
         self.args = args
         self.kwargs = kwargs
         self.signals = WorkerSignals()
-
+        self.kwargs['progress_callback'] = self.signals.progress
 
     @Slot()  # QtCore.Slot
     def run(self):
@@ -77,9 +80,9 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__(*args, **kwargs)
 
         self.threadpool = QThreadPool()
-        print("Multithreading with maximum %d threads" % self.threadpool.maxThreadCount())
+        # print("Multithreading with maximum %d threads" % self.threadpool.maxThreadCount())
 
-        self.setWindowTitle("FlyTrap for FlyPaper")
+        self.setWindowTitle("FlyTrap for FlyPaper (" + version + ")")
 
         self.running = False
         # self.thread_events = []
@@ -107,18 +110,14 @@ class MainWindow(QMainWindow):
 
         # Define status message label
         self.statusMessage = QLabel()
-        # self.statusMessage.setAlignment(Qt.AlignCenter)
-        # self.statusMessage.setStyleSheet("QLabel {background-color: #E1E1E1;}")
+        self.statusMessage.setAlignment(Qt.AlignCenter)
+        self.statusMessage.setStyleSheet("QLabel {background-color: #E1E1E1;}")
         self.statusMessage.setText('')
 
 
         self.showDownloadOptions()
 
-        worker = Worker(fetchPaper, self.download_group, self.user_name) # Any other args, kwargs are passed to the run function
-        worker.signals.result.connect(self.print_output)
-        worker.signals.finished.connect(self.thread_complete)
-        self.threadpool.start(worker)
-
+        self.fetchThread()
         # threadedFetch(self.download_group, self.user_name, self.statusMessage)
 
     @Slot()
@@ -126,8 +125,8 @@ class MainWindow(QMainWindow):
 
         self.optionsGroup = QHBoxLayout()
 
-        self.randomButton = QPushButton("Set Random FlyPaper")
-        self.randomButton.setCheckable(True)
+        self.randomButton = QPushButton("Swap FlyPaper")
+        self.randomButton.setCheckable(False)
         self.randomButton.clicked.connect(self.swapPaperNow)
         self.layout.addWidget(self.randomButton)
 
@@ -218,10 +217,16 @@ class MainWindow(QMainWindow):
         tray_menu.addAction(hide_action)
         tray_menu.addAction(swap_action)
         tray_menu.addAction(quit_action)
-        self.tray_icon.activated.connect(self.show)
+        self.tray_icon.activated.connect(self.onTrayActivated)
         self.tray_icon.setContextMenu(tray_menu)
         self.tray_icon.show()
  
+    def onTrayActivated(self, reason):
+        # print("tray activated", reason)
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
+            # print("tray activated", reason)
+            self.show()
+
     @Slot()
     def selectDownloadGroup(self, value):
         self.download_group = value
@@ -240,8 +245,8 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def swapPaperNow(self):
-        print("Swap paper now")
-        swapPaper(self.download_group, self.user_name, self.statusMessage)
+        # print("Swap paper now")
+        self.swapThread()
 
     @Slot()
     def handleDownloadButton(self):
@@ -252,11 +257,11 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def startDownload(self):
-        print("Start button clicked")
+        # print("Start button clicked")
         self.running = True
         self.current_event = Event()
 
-        self.swapThread()
+        self.swapScheduledThread()
         
         self.downloadButton.setText('Stop')
         self.downloadGroup.setEnabled(False)
@@ -265,7 +270,7 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def stopDownload(self):
-        print("Stop button clicked")
+        # print("Stop button clicked")
         self.current_event.set()
         self.running = False
 
@@ -276,14 +281,29 @@ class MainWindow(QMainWindow):
         self.downloadSchedule.setEnabled(True)
 
     @Slot()
-    def swapThread(self):
-        # threadedSwap(self.download_schedule, self.download_group, self.user_name, self.current_event, self.statusMessage)
+    def fetchThread(self):
+        worker = Worker(fetchPaper, self.download_group, self.user_name) # Any other args, kwargs are passed to the run function
+        worker.signals.result.connect(self.print_output)
+        worker.signals.finished.connect(self.thread_complete)
+        worker.signals.progress.connect(self.progress_fn)
+        self.threadpool.start(worker)
+
+
+    @Slot()
+    def swapScheduledThread(self):
         worker = Worker(scheduledPaperSwap, self.download_schedule, self.download_group, self.user_name, self.current_event) # Any other args, kwargs are passed to the run function
         worker.signals.result.connect(self.print_output)
         worker.signals.finished.connect(self.thread_complete)
         worker.signals.progress.connect(self.progress_fn)
         self.threadpool.start(worker)
 
+    @Slot()
+    def swapThread(self):
+        worker = Worker(swapPaper, self.download_group, self.user_name) # Any other args, kwargs are passed to the run function
+        worker.signals.result.connect(self.print_output)
+        worker.signals.finished.connect(self.thread_complete)
+        worker.signals.progress.connect(self.progress_fn)
+        self.threadpool.start(worker)
 
     # Override closeEvent, to intercept the window closing event
     # The window will be closed only if there is no check mark in the check box
@@ -298,11 +318,27 @@ class MainWindow(QMainWindow):
                 2000
             )
 
+    def progress_fn(self, prog):
+        # print("progress status", prog['status'])
+        if 'fetch' in prog and prog['fetch']:
+            # print("FETCH AGAIN")
+            self.fetchThread()
+
+        if 'status' in prog:
+            self.statusMessage.setText(prog['status'])
+
+        if 'papers' in prog:
+            if len(prog['papers']) >= 1:
+                self.randomButton.setEnabled(True)
+            else:
+                self.randomButton.setEnabled(False)
+
+
     def print_output(self, s):
-        print("THREAD OUTPUT", s)
-        if s and s['swap']:
-            print("YES. SWAP AGAIN")
-            self.swapThread()
+        # print("THREAD OUTPUT", s)
+        if s and 'swap' in s and s['swap']:
+            # print("YES. SWAP AGAIN")
+            self.swapScheduledThread()
 
     def thread_complete(self):
         print("THREAD COMPLETE!")

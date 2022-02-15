@@ -10,9 +10,13 @@ displays = get_monitors()
 primary_display = False
 
 for m in displays:
-    if(m.is_primary):
+    if primary_display == False or m.width > primary_display.width:
         primary_display = m
+    # if(m.is_primary):
+    #     primary_display = m
 
+print(displays)
+print(primary_display)
 
 tempdir = tempfile.gettempdir()
 
@@ -34,8 +38,12 @@ for (dirpath, dirnames, filenames) in os.walk(flypaperdir):
     break
 
 
-def fetchPaper(group, username):
+def fetchPaper(group, username, statusMessage):
     print("fetch paper")
+    if len(papers) > 1:
+        return
+
+    # statusMessage.setText('Searching for FlyPaper')
     query = {'limit': 1, 'search': ''}
 
     if group == 'Featured':
@@ -44,16 +52,23 @@ def fetchPaper(group, username):
     if group == 'Liked by':
         query['search'] = 'liked:' + username
 
+    if group == 'Created by':
+        query['search'] = username
+
     response = requests.get('https://flypaper.theflyingfabio.com/api/paper/random', params=query)
     data = response.json()
 
-    paper = data[0]
+    # if len(data) == 0:
+        # statusMessage.setText('No FlyPaper Found')
 
-    if paper['id']:
-        savePaper(paper['id'], paper['filename'], group, username)
+    for paper in data:
+        if paper['id']:
+            savePaper(paper['id'], paper['filename'], group, username, statusMessage)
 
 
-def savePaper(id, filename, group, username):
+def savePaper(id, filename, group, username, statusMessage):
+    # statusMessage.setText('Downloading FlyPaper')
+
     url = "https://flypaper.theflyingfabio.com/render/" + str(id) 
 
     query = { 'w': primary_display.width }
@@ -68,22 +83,27 @@ def savePaper(id, filename, group, username):
     # insert at the start of the array
     print("save the paper")
     papers.insert(0, filename)
+    # statusMessage.setText('')
 
-    if len(papers) < 2:
-        fetchPaper(group, username)
+    # if len(papers) < 1:
+    #     fetchPaper(group, username, statusMessage)
 
-def threadedFetch(group, username):
-    fetchThread = Thread(target = fetchPaper, args = (group, username))
+def threadedFetch(group, username, statusMessage):
+    fetchThread = Thread(target = fetchPaper, args = (group, username, statusMessage))
     fetchThread.setDaemon(True)
     fetchThread.start()
 
-def swapPaper(group, username):
+def swapPaper(group, username, statusMessage):
+    # statusMessage.setText('Swapping')
     print("swap the papers from ", papers)
-    filename = papers.pop()
-    path = os.path.join(flypaperdir, filename)
-    ctypes.windll.user32.SystemParametersInfoW(20, 0, path , 0)
-    currentPaper = filename
-    threadedFetch(group, username)
+    if (len(papers) >= 1):
+        filename = papers.pop()
+        path = os.path.join(flypaperdir, filename)
+        ctypes.windll.user32.SystemParametersInfoW(20, 0, path , 0)
+        currentPaper = filename
+    # statusMessage.setText('')
+    if len(papers) < 1:
+        threadedFetch(group, username, statusMessage)
 
 def getScheduleInSeconds(schedule):
     seconds = {
@@ -98,25 +118,27 @@ def getScheduleInSeconds(schedule):
         }
     return seconds.get(schedule, 60)
 
-def scheduledPaperSwap(schedule, group, username, exit_event):
+def scheduledPaperSwap(schedule, group, username, exit_event, statusMessage):
 
     start_time = time.time()
     seconds = getScheduleInSeconds(schedule)
     print("start scheduler")
 
     print("tick")
-    swapPaper(group, username)
+    swapPaper(group, username, statusMessage)
 
     print("sleeping for ", seconds)
+    # statusMessage.setText('')
     time.sleep(seconds - ((time.time() - start_time) % seconds))
     print("awake", exit_event.is_set())
 
     if not exit_event.is_set():
         print("Start a new thread")
-        threadedSwap(schedule, group, username, exit_event)
+        threadedSwap(schedule, group, username, exit_event, statusMessage)
 
 
-def threadedSwap(schedule, group, username, exit_event):
-    fetchThread = Thread(target = scheduledPaperSwap, args = (schedule, group, username, exit_event))
+def threadedSwap(schedule, group, username, exit_event, statusMessage):
+    fetchThread = Thread(target = scheduledPaperSwap, args = (schedule, group, username, exit_event, statusMessage))
     fetchThread.setDaemon(True)
     fetchThread.start()
+

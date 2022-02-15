@@ -1,5 +1,5 @@
 from threading import Thread, Event
-from PySide6.QtCore import Slot, QSize
+from PySide6.QtCore import Slot, QSize, Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QMenu, QComboBox, QFileDialog, QSystemTrayIcon, QStyle, QCheckBox, QWidget, QPushButton, QMainWindow, QLabel, QLineEdit, QVBoxLayout, QHBoxLayout
 from papers import threadedFetch, threadedSwap, swapPaper
@@ -37,9 +37,16 @@ class MainWindow(QMainWindow):
         # Set central widget
         self.setCentralWidget(container)
 
+        # Define status message label
+        self.statusMessage = QLabel()
+        # self.statusMessage.setAlignment(Qt.AlignCenter)
+        # self.statusMessage.setStyleSheet("QLabel {background-color: #E1E1E1;}")
+        self.statusMessage.setText('')
+
+
         self.showDownloadOptions()
 
-        threadedFetch(self.download_group, self.user_name)
+        threadedFetch(self.download_group, self.user_name, self.statusMessage)
 
     @Slot()
     def showDownloadOptions(self):
@@ -60,6 +67,7 @@ class MainWindow(QMainWindow):
         self.downloadGroup.addItem('All Paper')
         self.downloadGroup.addItem('Featured')
         self.downloadGroup.addItem('Liked by')
+        self.downloadGroup.addItem('Created by')
         self.downloadGroup.setMinimumWidth(150)
         self.downloadGroup.currentTextChanged.connect(self.selectDownloadGroup)
 
@@ -103,12 +111,15 @@ class MainWindow(QMainWindow):
 
         self.layout.addLayout(self.downloadButtonsLayout)
        
-        self.statusMessage = QLabel()
-        self.statusMessage.setText('')
-        self.layout.addWidget(self.statusMessage)
+
+        self.footerBox = QHBoxLayout()
 
         self.check_box = QCheckBox('Run in background when closed')
-        self.layout.addWidget(self.check_box)
+        self.footerBox.addWidget(self.check_box)
+
+        self.footerBox.addWidget(self.statusMessage)
+
+        self.layout.addLayout(self.footerBox)
 
         # Init QSystemTrayIcon
         self.tray_icon = QSystemTrayIcon(self)
@@ -134,13 +145,14 @@ class MainWindow(QMainWindow):
         tray_menu.addAction(hide_action)
         tray_menu.addAction(swap_action)
         tray_menu.addAction(quit_action)
+        self.tray_icon.activated.connect(self.show)
         self.tray_icon.setContextMenu(tray_menu)
         self.tray_icon.show()
  
     @Slot()
     def selectDownloadGroup(self, value):
         self.download_group = value
-        if value == 'Liked by':
+        if value == 'Liked by' or value == 'Created by':
             self.userName.setEnabled(True)
         else:
             self.userName.setEnabled(False)
@@ -156,7 +168,7 @@ class MainWindow(QMainWindow):
     @Slot()
     def swapPaperNow(self):
         print("Swap paper now")
-        swapPaper(self.download_group, self.user_name)
+        swapPaper(self.download_group, self.user_name, self.statusMessage)
 
     @Slot()
     def handleDownloadButton(self):
@@ -170,7 +182,10 @@ class MainWindow(QMainWindow):
         print("Start button clicked")
         self.running = True
         self.current_event = Event()
-        threadedSwap(self.download_schedule, self.download_group, self.user_name, self.current_event)
+
+        
+
+        threadedSwap(self.download_schedule, self.download_group, self.user_name, self.current_event, self.statusMessage)
         
         self.downloadButton.setText('Stop')
         self.downloadGroup.setEnabled(False)
@@ -185,7 +200,7 @@ class MainWindow(QMainWindow):
 
         self.downloadButton.setText('Start')
         self.downloadGroup.setEnabled(True)
-        if self.download_group == 'Liked by':
+        if self.download_group == 'Liked by' or self.download_group == 'Created by':
             self.userName.setEnabled(True)
         self.downloadSchedule.setEnabled(True)
 
